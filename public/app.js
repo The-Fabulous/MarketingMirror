@@ -1,12 +1,14 @@
 const $ = id => document.getElementById(id);
+const staticPreview = location.hostname.endsWith('.github.io');
+let apiAvailable = false;
 let mode = 'text', file = null, videoUrl = null, busy = false;
 function message(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); }
 function update() {
   $('count').textContent = `${$('source-text').value.length.toLocaleString('ru')} / 12 000`;
-  $('submit').disabled = busy || (mode === 'text' ? !$('source-text').value.trim() : !file);
+  $('submit').disabled = busy || !apiAvailable || (mode === 'text' ? !$('source-text').value.trim() : !file);
   $('submit').textContent = busy ? 'Обрабатываем…' : mode === 'text' ? 'Перевести на английский ↗' : 'Распознать речь из видео ↗';
   for (const id of ['text-tab','video-tab','source-text','text-file','video-file','remove-video','example']) $(id).disabled = busy;
-  $('privacy').textContent = mode === 'text' ? 'При переводе текст отправляется в Google AI.' : 'При распознавании видео отправляется в Google AI.';
+  $('privacy').textContent = !apiAvailable ? 'Материалы остаются в браузере — отправка недоступна.' : mode === 'text' ? 'При переводе текст отправляется в Google AI.' : 'При распознавании видео отправляется в Google AI.';
 }
 function switchMode(next) {
   if (busy) return;
@@ -55,7 +57,7 @@ async function api(path, body) {
 }
 function base64(blob) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = () => reject(new Error('Не удалось прочитать видео.')); reader.readAsDataURL(blob); }); }
 $('submit').onclick = async () => {
-  if (busy) return;
+  if (busy || !apiAvailable) return;
   busy = true; clearResult(); update(); message(mode === 'video' ? 'Распознаём речь. Это может занять до двух минут…' : 'Gemma 4 переводит текст на английский…');
   try {
     if (mode === 'video') {
@@ -71,5 +73,24 @@ $('submit').onclick = async () => {
 };
 $('copy').onclick = async () => { try { await navigator.clipboard.writeText($('result-text').value); message('Перевод скопирован.'); } catch { message('Не удалось скопировать. Выделите текст и скопируйте вручную.', true); } };
 $('download').onclick = () => { const url = URL.createObjectURL(new Blob([$('result-text').value], {type:'text/plain;charset=utf-8'})); const link = document.createElement('a'); link.href = url; link.download = 'marketing-mirror-en.txt'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
-fetch('/api/status').then(r => r.json()).then(data => { $('connection').textContent = data.configured ? '● API подключён · Gemma 4' : '○ Для перевода нужен ключ API'; }).catch(() => { $('connection').textContent = '○ Сервер недоступен'; });
+function showPreviewNotice(text) {
+  $('connection').textContent = '○ Демо интерфейса';
+  $('hosting-note').textContent = text;
+  $('hosting-note').hidden = false;
+}
+if (staticPreview) {
+  showPreviewNotice('Это демо: можно добавить текст и посмотреть видео. Перевод и распознавание речи станут доступны после подключения сервера.');
+} else {
+  fetch('./api/status', { signal: AbortSignal.timeout(10000) }).then(async response => {
+    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('API unavailable');
+    const data = await response.json();
+    if (typeof data.configured !== 'boolean') throw new Error('API unavailable');
+    apiAvailable = true;
+    $('connection').textContent = data.configured ? '● API подключён · Gemma 4' : '○ Для перевода нужен ключ API';
+    update();
+  }).catch(() => {
+    showPreviewNotice('Сервер перевода недоступен. Пока можно работать с текстом и смотреть видео. Если сервер уже запущен, обновите страницу.');
+    update();
+  });
+}
 update();

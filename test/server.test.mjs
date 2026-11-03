@@ -35,7 +35,15 @@ test('HTTP serves UI, protects secrets and returns structured errors', async () 
   const server=createServer({}); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const url=`http://127.0.0.1:${server.address().port}`;
   try {
-    assert.equal((await fetch(url)).status,200);
+    const page = await fetch(url);
+    assert.equal(page.status,200);
+    const html = await page.text();
+    // Resolve the actual page references, so moving the entry point cannot break its assets silently.
+    for (const match of html.matchAll(/(?:src|href)="([^"\s]+\.(?:css|js))"/g)) {
+      const asset = await fetch(new URL(match[1], `${url}/`));
+      assert.equal(asset.status,200,`Missing asset: ${match[1]}`);
+      assert.ok((await asset.text()).length > 0);
+    }
     assert.equal((await fetch(`${url}/.env`)).status,404);
     assert.deepEqual(await (await fetch(`${url}/api/status`)).json(),{configured:false});
     const invalid=await fetch(`${url}/api/translate`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{'});

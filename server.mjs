@@ -53,7 +53,7 @@ export async function transcribe(input, config = process.env, request = fetch) {
   if (text.length > 12000) throw new RequestError('Расшифровка слишком длинная. Загрузите более короткое видео.', 422);
   return { text };
 }
-const publicFiles = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'] };
+const publicFiles = { '/': ['index.html', 'text/html; charset=utf-8'], '/public/app.js': ['public/app.js', 'text/javascript; charset=utf-8'], '/public/style.css': ['public/style.css', 'text/css; charset=utf-8'] };
 export function createServer(config = process.env, request = fetch) {
   return http.createServer(async (req, res) => {
     const send = (status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
@@ -72,7 +72,7 @@ export function createServer(config = process.env, request = fetch) {
       }
       if (req.method === 'GET' && publicFiles[path]) {
         const [file, type] = publicFiles[path];
-        const content = await readFile(new URL(`./public/${file}`, import.meta.url));
+        const content = await readFile(new URL(`./${file}`, import.meta.url));
         res.writeHead(200, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" }); return res.end(content);
       }
       send(404, { error: 'Не найдено.' });
